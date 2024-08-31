@@ -4,55 +4,60 @@
 
 -- Frame to phone flags
 BATTERY_LEVEL_FLAG = 0x0c
---TODO BATTERY_LEVEL_FLAG = "\x0c"
 
 -- Phone to Frame flags
 TEXT_FLAG = 0x0a
 
-local app_data_raw = {}
+local app_data_accum = {}
+local app_data_block = {}
 local app_data = {}
 
 -- Data Handler: called when data arrives, must execute quickly.
--- Update the app_data_raw item based on the contents of the current packet
+-- Update the app_data_accum item based on the contents of the current packet
 -- The first byte of the packet indicates the message type, and the item's key
 -- If the key is not present, initialise a new app data item
 -- Accumulate chunks of data of the specified type, for later processing
-function update_app_data_raw(data)
-    local item = app_data_raw[string.byte(data, 1)]
+-- TODO add reliability features (packet acknowledgement or dropped packet retransmission requests, message and packet sequence numbers)
+function update_app_data_accum(data)
+    local msg_flag = string.byte(data, 1)
+    local item = app_data_accum[msg_flag]
     if item == nil or next(item) == nil then
-        item = { chunk_table = {}, size = 0, recv_bytes = 0 }
-        app_data_raw[string.byte(data, 1)] = item
+        item = { chunk_table = {}, num_chunks = 0, size = 0, recv_bytes = 0 }
+        app_data_accum[msg_flag] = item
     end
 
-    if #item.chunk_table == 0 then
+    if item.num_chunks == 0 then
         -- first chunk of new data contains size (Uint16)
         item.size = string.byte(data, 2) << 8 | string.byte(data, 3)
         item.chunk_table[1] = string.sub(data, 4)
+        item.num_chunks = 1
         item.recv_bytes = string.len(data) - 3
+
+        if item.recv_bytes == item.size then
+            app_data_block[msg_flag] = item.chunk_table[1]
+            item.size = 0
+            item.recv_bytes = 0
+            item.num_chunks = 0
+            item.chunk_table[1] = nil
+            app_data_accum[msg_flag] = item
+        end
     else
-        item.chunk_table[#item.chunk_table + 1] = string.sub(data, 2)
-        item.recv_bytes = string.len(data) - 1
-    end
-end
+        item.chunk_table[item.num_chunks + 1] = string.sub(data, 2)
+        item.num_chunks = item.num_chunks + 1
+        item.recv_bytes = item.recv_bytes + string.len(data) - 1
 
--- Works through app_data_raw and if any items are ready, run the corresponding parser
-function process_raw_items()
-    local processed = 0
+        -- if all bytes are received, concat and move message to block
+        -- but don't parse yet
+        if item.recv_bytes == item.size then
+            app_data_block[msg_flag] = table.concat(item.chunk_table)
 
-    for flag, item in pairs(app_data_raw) do
-        if item.size > 0 and item.recv_bytes == item.size then
-            -- parse the app_data_raw item into an app_data item
-            app_data[flag] = parsers[flag](table.concat(item.chunk_table))
-
-            -- then clear out the raw data
             for k, v in pairs(item.chunk_table) do item.chunk_table[k] = nil end
             item.size = 0
             item.recv_bytes = 0
-            processed = processed + 1
+            item.num_chunks = 0
+            app_data_accum[msg_flag] = item
         end
     end
-
-    return processed
 end
 
 -- Parse the text message raw data. If the message had more structure (layout etc.)
@@ -61,6 +66,27 @@ function parse_text(data)
     local text = {}
     text.data = data
     return text
+end
+
+-- register the respective message parsers
+local parsers = {}
+parsers[TEXT_FLAG] = parse_text
+
+-- Works through app_data_block and if any items are ready, run the corresponding parser
+function process_raw_items()
+    local processed = 0
+
+    for flag, block in pairs(app_data_block) do
+        -- parse the app_data_block item into an app_data item
+        app_data[flag] = parsers[flag](block)
+
+        -- then clear out the raw data
+        app_data_block[flag] = nil
+
+        processed = processed + 1
+    end
+
+    return processed
 end
 
 -- draw the current text on the display
@@ -84,8 +110,8 @@ function app_loop()
                 -- process any raw items, if ready (parse into text, then clear raw)
                 local items_ready = process_raw_items()
 
-                -- TODO little sleep? (maybe data_handler is even called again, that's okay)
-                frame.sleep(0.02)
+                -- TODO tune sleep durations to optimise for data handler and processing
+                frame.sleep(0.005)
 
                 -- only need to print it once when it's ready, it will stay there
                 if items_ready > 0 then
@@ -95,7 +121,8 @@ function app_loop()
                     frame.display.show()
                 end
 
-                frame.sleep(0.02)
+                -- TODO tune sleep durations to optimise for data handler and processing
+                frame.sleep(0.005)
 
                 -- periodic battery level updates
                 local t = frame.time.utc()
@@ -119,11 +146,8 @@ function app_loop()
     end
 end
 
--- register the respective message parsers
-local parsers = { TEXT_FLAG = parse_text }
-
 -- register the handler as a callback for all data sent from the host
-frame.bluetooth.receive_callback(update_app_data_raw)
+frame.bluetooth.receive_callback(update_app_data_accum)
 
 -- run the main app loop
 app_loop()

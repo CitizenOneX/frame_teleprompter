@@ -20,3 +20,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/frame_app.lua
+    - assets/frame_app.min.lua
