@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:frame_teleprompter/frame_helper.dart';
 import 'package:logging/logging.dart';
 
+import 'frame_helper.dart';
 import 'simple_frame_app.dart';
 
 
@@ -57,6 +57,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
           _textChunks.addAll(content.split('\n').map((chunk) => FrameHelper.wrapText(chunk, 640, 4)));
           _currentLine = 0;
         });
+
+        // and send initial text to Frame
+        await frame!.sendMessage(0x0a, utf8.encode(FrameHelper.wrapText(_textChunks[_currentLine], 640, 4)));
       }
       else {
         currentState = ApplicationState.ready;
@@ -79,18 +82,17 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
 
   @override
   Widget build(BuildContext context) {
-    // FIXME remove
-    currentState = ApplicationState.ready;
     return MaterialApp(
       title: 'Frame Teleprompter',
       theme: ThemeData.dark(),
       home: Scaffold(
         appBar: AppBar(
           title: const Text('Frame Teleprompter'),
+          actions: [getBatteryWidget()]
         ),
         body: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onVerticalDragEnd: (x) {
+          onVerticalDragEnd: (x) async {
               if (x.velocity.pixelsPerSecond.dy > 0) {
                 _currentLine > 0 ? --_currentLine : null;
               }
@@ -98,7 +100,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                 _currentLine < _textChunks.length - 1 ? ++_currentLine : null;
               }
               if (_currentLine >= 0) {
-                frame?.sendMessage(0x0a, utf8.encode(_textChunks[_currentLine]));
+                await frame!.sendMessage(0x0a, utf8.encode(FrameHelper.wrapText(_textChunks[_currentLine], 640, 4)));
               }
               if (mounted) setState(() {});
             },
