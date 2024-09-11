@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:logging/logging.dart';
 
-import 'frame_helper.dart';
-import 'simple_frame_app.dart';
+import 'package:simple_frame_app/simple_frame_app.dart';
+import 'package:simple_frame_app/frame_helper.dart';
 
 
 void main() => runApp(const MainApp());

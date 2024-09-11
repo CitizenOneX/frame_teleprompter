@@ -10,8 +10,9 @@ dependencies:
   file_picker: ^8.1.2
   flutter:
     sdk: flutter
-  flutter_blue_plus: ^1.32.12
   logging: ^1.2.0
+  simple_frame_app:
+    git: https://github.com/CitizenOneX/simple_frame_app.git
 
 dev_dependencies:
   flutter_test:
@@ -21,5 +22,4 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/frame_app.lua
     - assets/frame_app.min.lua
