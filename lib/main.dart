@@ -1,11 +1,11 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:logging/logging.dart';
 
 import 'package:simple_frame_app/simple_frame_app.dart';
-import 'package:simple_frame_app/frame_helper.dart';
+import 'package:simple_frame_app/text_utils.dart';
+import 'package:simple_frame_app/tx/text.dart';
 
 
 void main() => runApp(const MainApp());
@@ -54,12 +54,12 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
 
         // Update the UI
         setState(() {
-          _textChunks.addAll(content.split('\n').map((chunk) => FrameHelper.wrapText(chunk, 640, 4)));
+          _textChunks.addAll(content.split('\n').map((chunk) => TextUtils.wrapText(chunk, 640, 4)));
           _currentLine = 0;
         });
 
         // and send initial text to Frame
-        await frame!.sendMessage(0x0a, utf8.encode(FrameHelper.wrapText(_textChunks[_currentLine], 640, 4)));
+        await frame!.sendMessage(TxPlainText(msgCode: 0x0a, text: TextUtils.wrapText(_textChunks[_currentLine], 640, 4)));
       }
       else {
         currentState = ApplicationState.ready;
@@ -100,7 +100,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                 _currentLine < _textChunks.length - 1 ? ++_currentLine : null;
               }
               if (_currentLine >= 0) {
-                await frame!.sendMessage(0x0a, utf8.encode(FrameHelper.wrapText(_textChunks[_currentLine], 640, 4)));
+                await frame!.sendMessage(TxPlainText(msgCode: 0x0a, text: TextUtils.wrapText(_textChunks[_currentLine], 640, 4)));
               }
               if (mounted) setState(() {});
             },
